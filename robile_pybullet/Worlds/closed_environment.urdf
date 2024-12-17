@@ -1,0 +1,115 @@
+<?xml version="1.0" ?>
+<robot name="plane">
+    <!-- Base Link (World) -->
+    <link name="world"/>
+
+    <!-- Plane Link -->
+    <link name="planeLink">
+        <contact>
+            <lateral_friction value="1"/>
+        </contact>
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="0"/>
+            <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+        </inertial>
+        <visual>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <geometry>
+                <mesh filename="meshes/plane.obj" scale="1 1 1"/>
+            </geometry>
+            <material name="white">
+                <color rgba="1 1 1 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin rpy="0 0 0" xyz="0 0 -5"/>
+            <geometry>
+                <box size="30 30 10"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <!-- Walls with Proper Inertial Data -->
+    <link name="northWall">
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="100"/>
+            <inertia ixx="10" ixy="0" ixz="0" iyy="10" iyz="0" izz="10"/>
+        </inertial>
+        <collision>
+            <origin rpy="0 0 0" xyz="0 15 5"/>
+            <geometry>
+                <box size="30 1 10"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="southWall">
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="100"/>
+            <inertia ixx="10" ixy="0" ixz="0" iyy="10" iyz="0" izz="10"/>
+        </inertial>
+        <collision>
+            <origin rpy="0 0 0" xyz="0 -15 5"/>
+            <geometry>
+                <box size="30 1 10"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="eastWall">
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="100"/>
+            <inertia ixx="10" ixy="0" ixz="0" iyy="10" iyz="0" izz="10"/>
+        </inertial>
+        <collision>
+            <origin rpy="0 0 0" xyz="15 0 5"/>
+            <geometry>
+                <box size="1 30 10"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="westWall">
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="100"/>
+            <inertia ixx="10" ixy="0" ixz="0" iyy="10" iyz="0" izz="10"/>
+        </inertial>
+        <collision>
+            <origin rpy="0 0 0" xyz="-15 0 5"/>
+            <geometry>
+                <box size="1 30 10"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <!-- Joints to connect walls and plane to world -->
+    <joint name="world_to_plane" type="fixed">
+        <parent link="world"/>
+        <child link="planeLink"/>
+    </joint>
+
+    <joint name="world_to_northWall" type="fixed">
+        <parent link="world"/>
+        <child link="northWall"/>
+    </joint>
+
+    <joint name="world_to_southWall" type="fixed">
+        <parent link="world"/>
+        <child link="southWall"/>
+    </joint>
+
+    <joint name="world_to_eastWall" type="fixed">
+        <parent link="world"/>
+        <child link="eastWall"/>
+    </joint>
+
+    <joint name="world_to_westWall" type="fixed">
+        <parent link="world"/>
+        <child link="westWall"/>
+    </joint>
+</robot>
