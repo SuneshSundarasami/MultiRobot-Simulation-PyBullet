@@ -22,7 +22,7 @@ robot_urdf_path = os.path.join(current_directory, "robile_pybullet", "robile.urd
 robot_id = p.loadURDF(robot_urdf_path, basePosition=[0, 0, 0.1])
 
 # Create LaserScanner object
-laser_scanner = LaserScanner(robot_id)
+laser_scanner = LaserScanner(robot_id,laser_pointers=True)
 
 # Add a wall
 def add_wall():
