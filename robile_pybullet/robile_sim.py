@@ -1,45 +1,68 @@
-import pybullet as p
 import os
 import time
+import pybullet as p
 import pybullet_data
-from laser_scanner import LaserScanner
 import math
+import rclpy
+from laser_scanner import LaserScanner
+from rclpy.node import Node
 
+class RobotSimulationNode(Node):
+    def __init__(self):
+        super().__init__('robot_simulation_node')
 
-current_directory = os.getcwd()
-# Start the simulation in GUI mode
-p.connect(p.GUI)
-p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        p.connect(p.GUI)
+        p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        
+        self.load_environment()
+        
+        self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers=False)
+        
+        p.setTimeStep(1. / 120.)
+        
+        self.timer = self.create_timer(1. / 20., self.simulation_step)
 
-# Load ground plane and set gravity
-urdf_base_path = os.path.join(current_directory, "robile_pybullet", "Worlds")
-ground_urdf_path = os.path.join(urdf_base_path, "closed_environment.urdf")
-p.loadURDF(ground_urdf_path)
-p.setGravity(0, 0, -9.8)
+    def load_environment(self):
+        current_directory = os.getcwd()
+        urdf_base_path = os.path.join(current_directory, "robile_pybullet", "Worlds")
+        
+        ground_urdf_path = os.path.join(urdf_base_path, "closed_environment.urdf")
+        p.loadURDF(ground_urdf_path)
+        p.setGravity(0, 0, -9.8)
+        
+        robot_urdf_path = os.path.join(current_directory, "robile_pybullet", "robile.urdf")
+        self.robot_id = p.loadURDF(robot_urdf_path, basePosition=[0, 0, 0.1])
 
-# Load the robot URDF file
-robot_urdf_path = os.path.join(current_directory, "robile_pybullet", "robile.urdf")
-robot_id = p.loadURDF(robot_urdf_path, basePosition=[0, 0, 0.1])
+        self.add_wall()
 
-# Create LaserScanner object
-laser_scanner = LaserScanner(robot_id,laser_pointers=True)
+    def add_wall(self):
+        wall_half_extents = [0.5, 0.1, 1.0]
+        wall_collision_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=wall_half_extents)
+        wall_position = [5, 0, 1]
+        wall_orientation = p.getQuaternionFromEuler([0, 0, math.pi / 2])
+        p.createMultiBody(baseMass=0, baseCollisionShapeIndex=wall_collision_shape, 
+                           basePosition=wall_position, baseOrientation=wall_orientation)
 
-# Add a wall
-def add_wall():
-    wall_half_extents = [0.5, 0.1, 1.0]  # Wall size
-    wall_collision_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=wall_half_extents)
-    wall_position = [5, 0, 1]  # Wall position
-    wall_orientation = p.getQuaternionFromEuler([0, 0, math.pi/2])  
-    p.createMultiBody(baseMass=0, baseCollisionShapeIndex=wall_collision_shape, basePosition=wall_position, baseOrientation=wall_orientation)
+    def simulation_step(self):
+        p.stepSimulation()
+        
+        laser_data = self.laser_scanner.simulate()
+        self.laser_scanner.publish_laser_scan(laser_data)
+        
+        self.get_logger().info(f"Laser data : {laser_data}")
 
-add_wall()
+def main(args=None):
+    rclpy.init(args=args)
 
-# Set time step for faster simulation
-p.setTimeStep(1./120.)
+    robot_sim_node = RobotSimulationNode()
+    
+    try:
+        rclpy.spin(robot_sim_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        robot_sim_node.destroy_node()
+        rclpy.shutdown()
 
-# Main loop
-while True:
-    p.stepSimulation()
-    laser_data = laser_scanner.simulate()
-    print(laser_data)
-    time.sleep(1./20.)
+if __name__ == '__main__':
+    main()
