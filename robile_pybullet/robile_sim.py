@@ -16,7 +16,7 @@ class RobotSimulationNode(Node):
         
         self.load_environment()
         
-        self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers=False)
+        self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers=True)
         
         p.setTimeStep(1. / 120.)
         
@@ -36,12 +36,28 @@ class RobotSimulationNode(Node):
         self.add_wall()
 
     def add_wall(self):
-        wall_half_extents = [0.5, 0.1, 1.0]
-        wall_collision_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=wall_half_extents)
-        wall_position = [5, 0, 1]
-        wall_orientation = p.getQuaternionFromEuler([0, 0, math.pi / 2])
-        p.createMultiBody(baseMass=0, baseCollisionShapeIndex=wall_collision_shape, 
-                           basePosition=wall_position, baseOrientation=wall_orientation)
+        # Define the parameters for the cylindrical wall
+        radius = 0.5  # Radius of the circular wall
+        height = 1.0  # Height of the circular wall
+        
+        # Create a collision shape for the cylinder
+        wall_collision_shape = p.createCollisionShape(p.GEOM_CYLINDER, radius=radius, height=height)
+        
+        # Set the position and orientation for the circular wall
+        wall_position = [5, 0, height / 2]  # Position at x=5, y=0, and height/2 to center it
+        wall_orientation = p.getQuaternionFromEuler([0, 0, 0])  # No rotation
+        
+        # Create the multi-body (wall) with the defined properties
+        wall_id = p.createMultiBody(
+            baseMass=0, 
+            baseCollisionShapeIndex=wall_collision_shape, 
+            basePosition=wall_position, 
+            baseOrientation=wall_orientation
+        )
+        
+        # Set the color of the circular wall to blue
+        p.changeVisualShape(wall_id, -1, rgbaColor=[0, 0, 1, 1])  # Blue color (R, G, B, A)
+
 
     def simulation_step(self):
         p.stepSimulation()
