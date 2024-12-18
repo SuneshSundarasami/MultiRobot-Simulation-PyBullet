@@ -30,42 +30,70 @@ class RobotSimulationNode(Node):
         p.loadURDF(ground_urdf_path)
         p.setGravity(0, 0, -9.8)
         
-        robot_urdf_path = os.path.join(current_directory, "robile_pybullet", "robile.urdf")
+        robot_urdf_path = os.path.join(current_directory, "robile_pybullet", "robile3_config.urdf")
         self.robot_id = p.loadURDF(robot_urdf_path, basePosition=[0, 0, 0.1])
 
         self.add_wall()
 
     def add_wall(self):
-        # Define the parameters for the cylindrical wall
-        radius = 0.5  # Radius of the circular wall
-        height = 1.0  # Height of the circular wall
-        
-        # Create a collision shape for the cylinder
-        wall_collision_shape = p.createCollisionShape(p.GEOM_CYLINDER, radius=radius, height=height)
-        
-        # Set the position and orientation for the circular wall
-        wall_position = [5, 0, height / 2]  # Position at x=5, y=0, and height/2 to center it
-        wall_orientation = p.getQuaternionFromEuler([0, 0, 0])  # No rotation
-        
-        # Create the multi-body (wall) with the defined properties
-        wall_id = p.createMultiBody(
-            baseMass=0, 
-            baseCollisionShapeIndex=wall_collision_shape, 
-            basePosition=wall_position, 
-            baseOrientation=wall_orientation
-        )
-        
-        # Set the color of the circular wall to blue
-        p.changeVisualShape(wall_id, -1, rgbaColor=[0, 0, 1, 1])  # Blue color (R, G, B, A)
+        wall_half_extents = [3, 0.1, 1.0]  # Wall dimensions: 1.0 length, 0.1 width, 0.5 height
 
+        # Create the first wall (vertical part of the L shape)
+        wall1_collision_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=wall_half_extents)
+        wall1_position = [5, 0, 1]  # Position of the vertical wall
+        wall1_orientation = p.getQuaternionFromEuler([0, 0, math.pi / 2])  # Rotate 90 degrees on the Z-axis
+        p.createMultiBody(baseMass=0, baseCollisionShapeIndex=wall1_collision_shape, 
+                        basePosition=wall1_position, baseOrientation=wall1_orientation)
+
+        # Create the second wall (horizontal part of the L shape)
+        wall2_collision_shape = p.createCollisionShape(p.GEOM_BOX, halfExtents=wall_half_extents)
+        wall2_position = [5, 0.5, 1]  # Position of the horizontal wall (shifted along the Y-axis)
+        wall2_orientation = p.getQuaternionFromEuler([0, 0, 0])  # No rotation needed
+        p.createMultiBody(baseMass=0, baseCollisionShapeIndex=wall2_collision_shape, 
+                        basePosition=wall2_position, baseOrientation=wall2_orientation)
 
     def simulation_step(self):
         p.stepSimulation()
+
+        self.move_robot()
+
+        # Get the robot's current velocity
+        linear_velocity, angular_velocity = p.getBaseVelocity(self.robot_id)
+
+    # Log the velocities
+        self.get_logger().info(f"Linear Velocity: {linear_velocity}, Angular Velocity: {angular_velocity}")
         
         laser_data = self.laser_scanner.simulate()
         self.laser_scanner.publish_laser_scan(laser_data)
         
         self.get_logger().info(f"Laser data : {laser_data}")
+
+
+    def move_robot(self):
+        # Apply forward velocity and angular velocity
+        linear_velocity = 2.0 * 19.135093762  # m/s
+        angular_velocity = 5  # rad/s
+
+        max_motor_force = 10000
+
+        num_joints = p.getNumJoints(self.robot_id)
+
+        # Adjust this part to match your robot's joint setup (e.g., wheel joints)
+        for joint_index in range(num_joints):
+            joint_info = p.getJointInfo(self.robot_id, joint_index)
+            joint_name = joint_info[1].decode('utf-8')  # Joint name
+
+            # Apply torque to the robot's wheels
+            if "wheel" in joint_name:  # Assuming joint names contain "wheel"
+                if "left" in joint_name:
+                    print(joint_name)
+                    p.setJointMotorControl2(self.robot_id, joint_index, 
+                                            p.VELOCITY_CONTROL, targetVelocity=linear_velocity,force=max_motor_force)
+                elif "right" in joint_name:
+                    print(joint_name)
+                    p.setJointMotorControl2(self.robot_id, joint_index, 
+                                            p.VELOCITY_CONTROL, targetVelocity=linear_velocity,force=max_motor_force)
+
 
 def main(args=None):
     rclpy.init(args=args)
