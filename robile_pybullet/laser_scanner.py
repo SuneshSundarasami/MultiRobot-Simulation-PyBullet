@@ -6,13 +6,13 @@ from sensor_msgs.msg import LaserScan
 import numpy as np
 
 class LaserScanner:
-    def __init__(self, robot_id, node, laser_pointers=False, num_beams=90, 
+    def __init__(self, robot_id, node, laser_pointers_freq=False, num_beams=90, 
                  max_range=10, laser_height=0.1, laser_front_distance=0.4):
         # PyBullet-specific parameters
         self.robot_id = robot_id
         self.num_beams = num_beams
         self.max_range = float(max_range)  # Ensure max_range is a float
-        self.laser_pointers = laser_pointers
+        self.laser_pointers_freq = laser_pointers_freq
         self.laser_height = laser_height
         self.laser_front_distance = laser_front_distance
         
@@ -25,6 +25,8 @@ class LaserScanner:
         # Precompute laser angles
         self.laser_angle_step = math.pi / self.num_beams
         self.laser_angles = [-math.pi / 2 + i * self.laser_angle_step for i in range(self.num_beams)]
+
+        self.freq_count=0
     
     def calculate_distance(self, point1, point2):
         return math.sqrt(
@@ -33,7 +35,9 @@ class LaserScanner:
             (point1[2] - point2[2]) ** 2
         )
     
-    def simulate(self):
+    def simulate(self,freq_count):
+
+        print(f"---------------Frequency count:{freq_count}------------------------------------")
         # Get robot position and orientation
         robot_position, robot_orientation = p.getBasePositionAndOrientation(self.robot_id)
         euler_orientation = p.getEulerFromQuaternion(robot_orientation)
@@ -59,18 +63,20 @@ class LaserScanner:
         ray_results = p.rayTestBatch([front_position] * self.num_beams, laser_endpoints)
         
         laser_readings = []
+        self.freq_count+=1
         for i in range(self.num_beams):
             if ray_results[i][0] != -1:  # Collision detected
                 hit_position = ray_results[i][3]
                 distance = float(min(self.calculate_distance(front_position, hit_position), self.max_range))
                 laser_readings.append(distance)
                 
-                if self.laser_pointers:
+                if freq_count % self.laser_pointers_freq ==0:
                     p.addUserDebugLine(front_position, hit_position, [1, 0, 0], lineWidth=2)
             else:
                 laser_readings.append(float(self.max_range))
                 
-                if self.laser_pointers:
+                if freq_count % self.laser_pointers_freq ==0:
+
                     p.addUserDebugLine(front_position, laser_endpoints[i], [0, 1, 0], lineWidth=2)
         
         return laser_readings

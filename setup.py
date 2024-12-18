@@ -20,6 +20,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            f'test_movement = {package_name}.test_movement:main',
+            f'robile_sim = {package_name}.robile_sim:main',
         ],
     },
+    
 )

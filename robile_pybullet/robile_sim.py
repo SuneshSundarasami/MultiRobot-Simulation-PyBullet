@@ -16,11 +16,13 @@ class RobotSimulationNode(Node):
         
         self.load_environment()
         
-        self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers=True)
+        self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers_freq=1)
         
         p.setTimeStep(1. / 120.)
         
         self.timer = self.create_timer(1. / 20., self.simulation_step)
+
+        self.laser_freq_count=0
 
     def load_environment(self):
         current_directory = os.getcwd()
@@ -55,15 +57,17 @@ class RobotSimulationNode(Node):
     def simulation_step(self):
         p.stepSimulation()
 
-        self.move_robot()
+        # self.move_robot()
 
         # Get the robot's current velocity
         linear_velocity, angular_velocity = p.getBaseVelocity(self.robot_id)
 
     # Log the velocities
         self.get_logger().info(f"Linear Velocity: {linear_velocity}, Angular Velocity: {angular_velocity}")
+
+        self.laser_freq_count+=1
         
-        laser_data = self.laser_scanner.simulate()
+        laser_data = self.laser_scanner.simulate(self.laser_freq_count)
         self.laser_scanner.publish_laser_scan(laser_data)
         
         self.get_logger().info(f"Laser data : {laser_data}")
@@ -71,28 +75,42 @@ class RobotSimulationNode(Node):
 
     def move_robot(self):
         # Apply forward velocity and angular velocity
-        linear_velocity = 2.0 * 19.135093762  # m/s
-        angular_velocity = 5  # rad/s
+        linear_velocity = 2.0  # m/s
+        angular_velocity = 5.0  # rad/s
 
-        max_motor_force = 10000
+        max_motor_force = 10000  # Maximum force for the motors
+
+        # Actuator names as defined in the URDF
+        right_wheel_motor = "robile_5_drive_right_hub_wheel_motor"
+        left_wheel_motor = "robile_5_drive_left_hub_wheel_motor"
 
         num_joints = p.getNumJoints(self.robot_id)
 
-        # Adjust this part to match your robot's joint setup (e.g., wheel joints)
+        # Iterate through all joints to find actuators
         for joint_index in range(num_joints):
             joint_info = p.getJointInfo(self.robot_id, joint_index)
             joint_name = joint_info[1].decode('utf-8')  # Joint name
 
-            # Apply torque to the robot's wheels
-            if "wheel" in joint_name:  # Assuming joint names contain "wheel"
-                if "left" in joint_name:
-                    print(joint_name)
-                    p.setJointMotorControl2(self.robot_id, joint_index, 
-                                            p.VELOCITY_CONTROL, targetVelocity=linear_velocity,force=max_motor_force)
-                elif "right" in joint_name:
-                    print(joint_name)
-                    p.setJointMotorControl2(self.robot_id, joint_index, 
-                                            p.VELOCITY_CONTROL, targetVelocity=linear_velocity,force=max_motor_force)
+            # Check if the joint corresponds to the actuators defined in the URDF
+            if joint_name == left_wheel_motor:
+                self.get_logger().info(f"Controlling joint: {joint_name}")
+                p.setJointMotorControl2(
+                    self.robot_id,
+                    joint_index,
+                    controlMode=p.VELOCITY_CONTROL,
+                    targetVelocity=linear_velocity,
+                    force=max_motor_force
+                )
+            elif joint_name == right_wheel_motor:
+                self.get_logger().info(f"Controlling joint: {joint_name}")
+                p.setJointMotorControl2(
+                    self.robot_id,
+                    joint_index,
+                    controlMode=p.VELOCITY_CONTROL,
+                    targetVelocity=linear_velocity,
+                    force=max_motor_force
+                )
+
 
 
 def main(args=None):

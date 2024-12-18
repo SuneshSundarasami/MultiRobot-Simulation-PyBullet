@@ -1,0 +1,4 @@
+[console_scripts]
+robile_sim = robile_pybullet.robile_sim:main
+test_movement = robile_pybullet.test_movement:main
+
