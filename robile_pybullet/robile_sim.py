@@ -43,6 +43,22 @@ class RobotSimulationNode(Node):
 
         self.controller = RobileController(self.robot_id)
 
+        self.cmd_vel_subscriber = self.create_subscription(
+            Twist,
+            '/cmd_vel',
+            self.cmd_vel_callback,
+            10
+        )
+        self.cmd_vel = Twist()  
+
+    def cmd_vel_callback(self, msg):
+
+        vx = msg.linear.x
+        vy = msg.linear.y
+        omega = msg.angular.z
+        
+        self.controller.move_omnidirectional(vx, vy, omega)
+
 
     def load_environment(self):
         current_directory = os.getcwd()
@@ -99,7 +115,7 @@ class RobotSimulationNode(Node):
         self.publish_odometry()
 
 
-        self.controller.move_omnidirectional(1, 0, 1)
+        # self.controller.move_omnidirectional(1, 0, 1)
         # linear_velocity, angular_velocity=1,-1
         # self.move_robot_with_front_wheels(self.robot_id, linear_velocity, angular_velocity, 
         #                               self.wheel_radius, self.wheel_base, self.track_width)
