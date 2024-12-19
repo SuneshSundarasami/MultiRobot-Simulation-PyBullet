@@ -4,7 +4,8 @@ import pybullet as p
 import pybullet_data
 import math
 import rclpy
-from laser_scanner import LaserScanner
+import numpy as np
+from .laser_scanner import LaserScanner
 from rclpy.node import Node
 
 class RobotSimulationNode(Node):
@@ -17,7 +18,7 @@ class RobotSimulationNode(Node):
         self.load_environment()
         
         self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers_freq=1)
-        
+        p.setPhysicsEngineParameter(numSolverIterations=1000)
         p.setTimeStep(1. / 120.)
         
         self.timer = self.create_timer(1. / 20., self.simulation_step)
@@ -26,15 +27,20 @@ class RobotSimulationNode(Node):
 
     def load_environment(self):
         current_directory = os.getcwd()
-        urdf_base_path = os.path.join(current_directory, "robile_pybullet", "Worlds")
+        urdf_base_path = os.path.join(current_directory, "src","Simulation_pybullet", "robile_pybullet", "Worlds")
         
         ground_urdf_path = os.path.join(urdf_base_path, "closed_environment.urdf")
-        p.loadURDF(ground_urdf_path)
+        groundId = p.loadURDF(ground_urdf_path)
         p.setGravity(0, 0, -9.8)
-        
-        robot_urdf_path = os.path.join(current_directory, "robile_pybullet", "robile3_config.urdf")
-        self.robot_id = p.loadURDF(robot_urdf_path, basePosition=[0, 0, 0.1])
+        p.changeDynamics(groundId, -1, 
+                lateralFriction=1.0,
+                spinningFriction=0.1,
+                rollingFriction=0.1)
 
+        robot_urdf_path = os.path.join(current_directory, "src", "Simulation_pybullet", "robile_pybullet", "robile3_config.urdf")
+        self.robot_id = p.loadURDF(robot_urdf_path, basePosition=[0, 0, 0.05],useFixedBase=False)
+        p.setPhysicsEngineParameter(enableConeFriction=1)
+        p.setPhysicsEngineParameter(contactBreakingThreshold=0.001)
         self.add_wall()
 
     def add_wall(self):
@@ -55,15 +61,26 @@ class RobotSimulationNode(Node):
                         basePosition=wall2_position, baseOrientation=wall2_orientation)
 
     def simulation_step(self):
+        
+        for joint_index in range(p.getNumJoints(self.robot_id)):
+            p.changeDynamics(self.robot_id, joint_index,
+                        lateralFriction=1.0,
+                        spinningFriction=0.1,
+                        rollingFriction=0.1)
+        self.move_robot()
         p.stepSimulation()
-
-        # self.move_robot()
+        for joint_index in range(p.getNumJoints(self.robot_id)):
+            joint_info = p.getJointInfo(self.robot_id, joint_index)
+            joint_name = joint_info[1].decode('utf-8')
+            if "wheel" in joint_name.lower():
+                state = p.getJointState(self.robot_id, joint_index)
+                print(f"{joint_name} velocity: {state[1]}")
 
         # Get the robot's current velocity
-        linear_velocity, angular_velocity = p.getBaseVelocity(self.robot_id)
+        #linear_velocity, angular_velocity = p.getBaseVelocity(self.robot_id)
 
     # Log the velocities
-        self.get_logger().info(f"Linear Velocity: {linear_velocity}, Angular Velocity: {angular_velocity}")
+        #self.get_logger().info(f"Linear Velocity: {linear_velocity}, Angular Velocity: {angular_velocity}")
 
         self.laser_freq_count+=1
         
@@ -73,44 +90,62 @@ class RobotSimulationNode(Node):
         self.get_logger().info(f"Laser data : {laser_data}")
 
 
+    def calculate_wheel_velocities(self, linear_velocity, angular_velocity):
+        # Robot parameters
+        wheel_radius = 0.0515  # Replace with your wheel radius
+        wheel_separation = 0.105  # Replace with distance between left and right wheels
+        
+        # Calculate left and right wheel velocities
+        left_velocity = (linear_velocity - (wheel_separation * angular_velocity) / 2.0) / wheel_radius
+        right_velocity = (linear_velocity + (wheel_separation * angular_velocity) / 2.0) / wheel_radius
+        
+        return left_velocity, right_velocity
+
+
     def move_robot(self):
-        # Apply forward velocity and angular velocity
-        linear_velocity = 2.0  # m/s
-        angular_velocity = 5.0  # rad/s
-
-        max_motor_force = 10000  # Maximum force for the motors
-
-        # Actuator names as defined in the URDF
-        right_wheel_motor = "robile_5_drive_right_hub_wheel_motor"
-        left_wheel_motor = "robile_5_drive_left_hub_wheel_motor"
-
+        # Reset all joint motors first
         num_joints = p.getNumJoints(self.robot_id)
+        for joint_index in range(num_joints):
+            p.setJointMotorControl2(self.robot_id, joint_index, p.VELOCITY_CONTROL, force=0)
 
-        # Iterate through all joints to find actuators
+        # Set wheel velocities (different for each wheel)
+        linear_velocity = 3.0  # m/s
+        angular_velocity = 30.0  # rad/s for straight motion
+        max_force = 1000
+
+        left_velocity, right_velocity = self.calculate_wheel_velocities(linear_velocity, angular_velocity)
+        print("left_velocity ",left_velocity, "right_velocity ", right_velocity)
+        # Dictionary of wheel pairs
+        wheel_pairs = {
+            'robile_1': ['robile_1_drive_left_hub_wheel_joint', 'robile_1_drive_right_hub_wheel_joint'],
+            'robile_2': ['robile_2_drive_left_hub_wheel_joint', 'robile_2_drive_right_hub_wheel_joint'],
+            'robile_5': ['robile_5_drive_left_hub_wheel_joint', 'robile_5_drive_right_hub_wheel_joint'],
+            'robile_6': ['robile_6_drive_left_hub_wheel_joint', 'robile_6_drive_right_hub_wheel_joint']
+        }
+
+        # Set velocities for all wheels
+        num_joints = p.getNumJoints(self.robot_id)
         for joint_index in range(num_joints):
             joint_info = p.getJointInfo(self.robot_id, joint_index)
-            joint_name = joint_info[1].decode('utf-8')  # Joint name
-
-            # Check if the joint corresponds to the actuators defined in the URDF
-            if joint_name == left_wheel_motor:
-                self.get_logger().info(f"Controlling joint: {joint_name}")
-                p.setJointMotorControl2(
-                    self.robot_id,
-                    joint_index,
-                    controlMode=p.VELOCITY_CONTROL,
-                    targetVelocity=linear_velocity,
-                    force=max_motor_force
-                )
-            elif joint_name == right_wheel_motor:
-                self.get_logger().info(f"Controlling joint: {joint_name}")
-                p.setJointMotorControl2(
-                    self.robot_id,
-                    joint_index,
-                    controlMode=p.VELOCITY_CONTROL,
-                    targetVelocity=linear_velocity,
-                    force=max_motor_force
-                )
-
+            joint_name = joint_info[1].decode('utf-8')
+            
+            for wheel_pair in wheel_pairs.values():
+                if joint_name == wheel_pair[0]:  # Left wheel
+                    p.setJointMotorControl2(
+                        self.robot_id,
+                        joint_index,
+                        controlMode=p.VELOCITY_CONTROL,
+                        targetVelocity=left_velocity,
+                        force=max_force
+                    )
+                elif joint_name == wheel_pair[1]:  # Right wheel
+                    p.setJointMotorControl2(
+                        self.robot_id,
+                        joint_index,
+                        controlMode=p.VELOCITY_CONTROL,
+                        targetVelocity=right_velocity,
+                        force=max_force
+                    )
 
 
 def main(args=None):
