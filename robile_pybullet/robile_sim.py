@@ -11,6 +11,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose, Quaternion, Twist
 from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
+from robot_controller import RobileController
 
 class RobotSimulationNode(Node):
     def __init__(self):
@@ -39,6 +40,8 @@ class RobotSimulationNode(Node):
 
         self.tf_broadcaster = TransformBroadcaster(self)
         self.laser_offset = [0.4, 0.0, 0.0]  
+
+        self.controller = RobileController(self.robot_id)
 
 
     def load_environment(self):
@@ -95,9 +98,11 @@ class RobotSimulationNode(Node):
 
         self.publish_odometry()
 
-        linear_velocity, angular_velocity=1,-1
-        self.move_robot_with_front_wheels(self.robot_id, linear_velocity, angular_velocity, 
-                                      self.wheel_radius, self.wheel_base, self.track_width)
+
+        self.controller.move_omnidirectional(1, 0, 1)
+        # linear_velocity, angular_velocity=1,-1
+        # self.move_robot_with_front_wheels(self.robot_id, linear_velocity, angular_velocity, 
+        #                               self.wheel_radius, self.wheel_base, self.track_width)
 
         # Get the robot's current velocity
         #linear_velocity, angular_velocity = p.getBaseVelocity(self.robot_id)
@@ -113,93 +118,8 @@ class RobotSimulationNode(Node):
         self.get_logger().info(f"Laser data : {laser_data}")
 
 
-    def calculate_wheel_velocities(self, linear_velocity, angular_velocity):
-        # Robot parameters
-        wheel_radius = 0.0515  # Replace with your wheel radius
-        wheel_separation = 0.105  # Replace with distance between left and right wheels
-        
-        # Calculate left and right wheel velocities
-        left_velocity = (linear_velocity - (wheel_separation * angular_velocity) / 2.0) / wheel_radius
-        right_velocity = (linear_velocity + (wheel_separation * angular_velocity) / 2.0) / wheel_radius
-        
-        return left_velocity, right_velocity
 
 
-    def move_robot(self):
-        # Reset all joint motors first
-        num_joints = p.getNumJoints(self.robot_id)
-        for joint_index in range(num_joints):
-            p.setJointMotorControl2(self.robot_id, joint_index, p.VELOCITY_CONTROL, force=0)
-
-        # Set wheel velocities (different for each wheel)
-        linear_velocity = 3.0  # m/s
-        angular_velocity = 30.0  # rad/s for straight motion
-        max_force = 1000
-
-        left_velocity, right_velocity = self.calculate_wheel_velocities(linear_velocity, angular_velocity)
-        print("left_velocity ",left_velocity, "right_velocity ", right_velocity)
-        # Dictionary of wheel pairs
-        wheel_pairs = {
-            'robile_1': ['robile_1_drive_left_hub_wheel_joint', 'robile_1_drive_right_hub_wheel_joint'],
-            'robile_2': ['robile_2_drive_left_hub_wheel_joint', 'robile_2_drive_right_hub_wheel_joint'],
-            'robile_5': ['robile_5_drive_left_hub_wheel_joint', 'robile_5_drive_right_hub_wheel_joint'],
-            'robile_6': ['robile_6_drive_left_hub_wheel_joint', 'robile_6_drive_right_hub_wheel_joint']
-        }
-
-        # Set velocities for all wheels
-        num_joints = p.getNumJoints(self.robot_id)
-        for joint_index in range(num_joints):
-            joint_info = p.getJointInfo(self.robot_id, joint_index)
-            joint_name = joint_info[1].decode('utf-8')
-            
-            for wheel_pair in wheel_pairs.values():
-                if joint_name == wheel_pair[0]:  # Left wheel
-                    p.setJointMotorControl2(
-                        self.robot_id,
-                        joint_index,
-                        controlMode=p.VELOCITY_CONTROL,
-                        targetVelocity=left_velocity,
-                        force=max_force
-                    )
-                elif joint_name == wheel_pair[1]:  # Right wheel
-                    p.setJointMotorControl2(
-                        self.robot_id,
-                        joint_index,
-                        controlMode=p.VELOCITY_CONTROL,
-                        targetVelocity=right_velocity,
-                        force=max_force
-                    )
-    def move_robot_with_front_wheels(self, robot_id, linear_velocity, angular_velocity, wheel_radius, wheel_base, track_width):
-        if angular_velocity != 0:
-            turning_radius = linear_velocity / angular_velocity
-            outer_radius = turning_radius + track_width / 2
-            inner_radius = turning_radius - track_width / 2
-            
-            outer_velocity = outer_radius * angular_velocity
-            inner_velocity = inner_radius * angular_velocity
-        else:
-            outer_velocity = inner_velocity = linear_velocity
-
-        for group in [{'left': 2, 'right': 3}, {'left': 6, 'right': 7}]:
-            p.setJointMotorControl2(
-                bodyUniqueId=robot_id,
-                jointIndex=group['left'],
-                controlMode=p.VELOCITY_CONTROL,
-                targetVelocity=inner_velocity / wheel_radius if angular_velocity > 0 else outer_velocity / wheel_radius,
-                force=100,
-                positionGain=0.1,
-                velocityGain=0.1
-            )
-
-            p.setJointMotorControl2(
-                bodyUniqueId=robot_id,
-                jointIndex=group['right'],
-                controlMode=p.VELOCITY_CONTROL,
-                targetVelocity=outer_velocity / wheel_radius if angular_velocity > 0 else inner_velocity / wheel_radius,
-                force=100,
-                positionGain=0.1,
-                velocityGain=0.1
-            )
 
     def publish_odometry(self):
         # Retrieve the robot's current position and orientation
