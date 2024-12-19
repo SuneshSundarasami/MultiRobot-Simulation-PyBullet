@@ -7,7 +7,7 @@ import numpy as np
 
 class LaserScanner:
     def __init__(self, robot_id, node, laser_pointers_freq=False, num_beams=90, 
-                 max_range=10, laser_height=0.1, laser_front_distance=0.4):
+                 max_range=10, laser_height=0.1, laser_front_distance=0.4, beam_skip_rate=10):
         # PyBullet-specific parameters
         self.robot_id = robot_id
         self.num_beams = num_beams
@@ -15,6 +15,7 @@ class LaserScanner:
         self.laser_pointers_freq = laser_pointers_freq
         self.laser_height = laser_height
         self.laser_front_distance = laser_front_distance
+        self.beam_skip_rate = beam_skip_rate  # Control the number of debug lines by skipping beams
         
         # ROS2 node for publishing
         self.node = node
@@ -26,8 +27,9 @@ class LaserScanner:
         self.laser_angle_step = math.pi / self.num_beams
         self.laser_angles = [-math.pi / 2 + i * self.laser_angle_step for i in range(self.num_beams)]
 
-        self.freq_count=0
-    
+        self.freq_count = 0
+        self.debug_lines = {}  # Dictionary to store debug line IDs for updating positions
+
     def calculate_distance(self, point1, point2):
         return math.sqrt(
             (point1[0] - point2[0]) ** 2 +
@@ -35,8 +37,7 @@ class LaserScanner:
             (point1[2] - point2[2]) ** 2
         )
     
-    def simulate(self,freq_count):
-
+    def simulate(self, freq_count):
         print(f"---------------Frequency count:{freq_count}------------------------------------")
         # Get robot position and orientation
         robot_position, robot_orientation = p.getBasePositionAndOrientation(self.robot_id)
@@ -63,21 +64,33 @@ class LaserScanner:
         ray_results = p.rayTestBatch([front_position] * self.num_beams, laser_endpoints)
         
         laser_readings = []
-        self.freq_count+=1
-        for i in range(self.num_beams):
-            if ray_results[i][0] != -1:  # Collision detected
-                hit_position = ray_results[i][3]
-                distance = float(min(self.calculate_distance(front_position, hit_position), self.max_range))
-                laser_readings.append(distance)
-                
-                if freq_count % self.laser_pointers_freq ==0:
-                    p.addUserDebugLine(front_position, hit_position, [1, 0, 0], lineWidth=2)
-            else:
-                laser_readings.append(float(self.max_range))
-                
-                if freq_count % self.laser_pointers_freq ==0:
+        self.freq_count += 1
 
-                    p.addUserDebugLine(front_position, laser_endpoints[i], [0, 1, 0], lineWidth=2)
+
+        for i in range(0, self.num_beams): 
+            if ray_results[i][0] != -1:  # Collision detected
+                    hit_position = ray_results[i][3]
+                    distance = float(min(self.calculate_distance(front_position, hit_position), self.max_range))
+                    laser_readings.append(distance)
+            else:
+                    laser_readings.append(float("inf"))
+
+
+        # Update debug lines only on a specified frequency and for reduced beams
+        if freq_count % self.laser_pointers_freq == 0:
+            for i in range(0, self.num_beams, self.beam_skip_rate):  # Skip beams to reduce debug lines
+                if ray_results[i][0] != -1:  # Collision detected
+
+                    if i in self.debug_lines:
+                        p.removeUserDebugItem(self.debug_lines[i])  # Remove the old line
+                    line_id = p.addUserDebugLine(front_position, hit_position, [1, 0, 0], lineWidth=2)
+                    self.debug_lines[i] = line_id  # Store the new line ID
+                else:
+
+                    if i in self.debug_lines:
+                        p.removeUserDebugItem(self.debug_lines[i])  # Remove the old line
+                    line_id = p.addUserDebugLine(front_position, laser_endpoints[i], [0, 1, 0], lineWidth=2)
+                    self.debug_lines[i] = line_id  # Store the new line ID
         
         return laser_readings
     

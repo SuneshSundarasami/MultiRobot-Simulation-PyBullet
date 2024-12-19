@@ -7,6 +7,8 @@ import rclpy
 import numpy as np
 from .laser_scanner import LaserScanner
 from rclpy.node import Node
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Pose, Quaternion, Twist
 
 class RobotSimulationNode(Node):
     def __init__(self):
@@ -17,13 +19,24 @@ class RobotSimulationNode(Node):
         
         self.load_environment()
         
+<<<<<<< HEAD
         self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers_freq=1)
         p.setPhysicsEngineParameter(numSolverIterations=1000)
+=======
+        self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers_freq=100)
+        
+>>>>>>> 392f16d (Publishing odometry and fixed Laserscan data)
         p.setTimeStep(1. / 120.)
         
         self.timer = self.create_timer(1. / 20., self.simulation_step)
 
         self.laser_freq_count=0
+
+        self.wheel_radius = 0.05
+        self.wheel_base = 0.6
+        self.track_width = 0.4
+
+        self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
 
     def load_environment(self):
         current_directory = os.getcwd()
@@ -69,12 +82,21 @@ class RobotSimulationNode(Node):
                         rollingFriction=0.1)
         self.move_robot()
         p.stepSimulation()
+<<<<<<< HEAD
         for joint_index in range(p.getNumJoints(self.robot_id)):
             joint_info = p.getJointInfo(self.robot_id, joint_index)
             joint_name = joint_info[1].decode('utf-8')
             if "wheel" in joint_name.lower():
                 state = p.getJointState(self.robot_id, joint_index)
                 print(f"{joint_name} velocity: {state[1]}")
+=======
+
+        self.publish_odometry()
+
+        linear_velocity, angular_velocity=1,-1
+        self.move_robot_with_front_wheels(self.robot_id, linear_velocity, angular_velocity, 
+                                      self.wheel_radius, self.wheel_base, self.track_width)
+>>>>>>> 392f16d (Publishing odometry and fixed Laserscan data)
 
         # Get the robot's current velocity
         #linear_velocity, angular_velocity = p.getBaseVelocity(self.robot_id)
@@ -90,6 +112,7 @@ class RobotSimulationNode(Node):
         self.get_logger().info(f"Laser data : {laser_data}")
 
 
+<<<<<<< HEAD
     def calculate_wheel_velocities(self, linear_velocity, angular_velocity):
         # Robot parameters
         wheel_radius = 0.0515  # Replace with your wheel radius
@@ -146,6 +169,72 @@ class RobotSimulationNode(Node):
                         targetVelocity=right_velocity,
                         force=max_force
                     )
+=======
+    def move_robot_with_front_wheels(self, robot_id, linear_velocity, angular_velocity, wheel_radius, wheel_base, track_width):
+        if angular_velocity != 0:
+            turning_radius = linear_velocity / angular_velocity
+            outer_radius = turning_radius + track_width / 2
+            inner_radius = turning_radius - track_width / 2
+            
+            outer_velocity = outer_radius * angular_velocity
+            inner_velocity = inner_radius * angular_velocity
+        else:
+            outer_velocity = inner_velocity = linear_velocity
+
+        for group in [{'left': 2, 'right': 3}, {'left': 6, 'right': 7}]:
+            p.setJointMotorControl2(
+                bodyUniqueId=robot_id,
+                jointIndex=group['left'],
+                controlMode=p.VELOCITY_CONTROL,
+                targetVelocity=inner_velocity / wheel_radius if angular_velocity > 0 else outer_velocity / wheel_radius,
+                force=100,
+                positionGain=0.1,
+                velocityGain=0.1
+            )
+
+            p.setJointMotorControl2(
+                bodyUniqueId=robot_id,
+                jointIndex=group['right'],
+                controlMode=p.VELOCITY_CONTROL,
+                targetVelocity=outer_velocity / wheel_radius if angular_velocity > 0 else inner_velocity / wheel_radius,
+                force=100,
+                positionGain=0.1,
+                velocityGain=0.1
+            )
+
+    def publish_odometry(self):
+        # Retrieve the robot's current position and orientation
+        position, orientation = p.getBasePositionAndOrientation(self.robot_id)
+
+        # Create Odometry message
+        odom_msg = Odometry()
+        odom_msg.header.stamp = self.get_clock().now().to_msg()
+        odom_msg.header.frame_id = "odom"
+
+        # Fill pose information
+        odom_msg.pose.pose.position.x = position[0]
+        odom_msg.pose.pose.position.y = position[1]
+        odom_msg.pose.pose.position.z = position[2]
+        odom_msg.pose.pose.orientation = Quaternion(
+            x=orientation[0],
+            y=orientation[1],
+            z=orientation[2],
+            w=orientation[3],
+        )
+
+        # Fill velocity information
+        linear_velocity, angular_velocity = p.getBaseVelocity(self.robot_id)
+        odom_msg.twist.twist.linear.x = linear_velocity[0]
+        odom_msg.twist.twist.linear.y = linear_velocity[1]
+        odom_msg.twist.twist.linear.z = linear_velocity[2]
+        odom_msg.twist.twist.angular.x = angular_velocity[0]
+        odom_msg.twist.twist.angular.y = angular_velocity[1]
+        odom_msg.twist.twist.angular.z = angular_velocity[2]
+
+        # Publish odometry message
+        self.odom_publisher.publish(odom_msg)
+
+>>>>>>> 392f16d (Publishing odometry and fixed Laserscan data)
 
 
 def main(args=None):
