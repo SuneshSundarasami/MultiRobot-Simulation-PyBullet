@@ -5,10 +5,12 @@ import pybullet_data
 import math
 import rclpy
 import numpy as np
-from .laser_scanner import LaserScanner
+from laser_scanner import LaserScanner
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose, Quaternion, Twist
+from tf2_ros import TransformBroadcaster
+from geometry_msgs.msg import TransformStamped
 
 class RobotSimulationNode(Node):
     def __init__(self):
@@ -19,13 +21,10 @@ class RobotSimulationNode(Node):
         
         self.load_environment()
         
-<<<<<<< HEAD
         self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers_freq=1)
         p.setPhysicsEngineParameter(numSolverIterations=1000)
-=======
         self.laser_scanner = LaserScanner(self.robot_id, self, laser_pointers_freq=100)
         
->>>>>>> 392f16d (Publishing odometry and fixed Laserscan data)
         p.setTimeStep(1. / 120.)
         
         self.timer = self.create_timer(1. / 20., self.simulation_step)
@@ -38,9 +37,13 @@ class RobotSimulationNode(Node):
 
         self.odom_publisher = self.create_publisher(Odometry, '/odom', 10)
 
+        self.tf_broadcaster = TransformBroadcaster(self)
+        self.laser_offset = [0.4, 0.0, 0.0]  
+
+
     def load_environment(self):
         current_directory = os.getcwd()
-        urdf_base_path = os.path.join(current_directory, "src","Simulation_pybullet", "robile_pybullet", "Worlds")
+        urdf_base_path = os.path.join(current_directory, "robile_pybullet", "Worlds")
         
         ground_urdf_path = os.path.join(urdf_base_path, "closed_environment.urdf")
         groundId = p.loadURDF(ground_urdf_path)
@@ -50,7 +53,8 @@ class RobotSimulationNode(Node):
                 spinningFriction=0.1,
                 rollingFriction=0.1)
 
-        robot_urdf_path = os.path.join(current_directory, "src", "Simulation_pybullet", "robile_pybullet", "robile3_config.urdf")
+        robot_urdf_path = os.path.join(current_directory, "robile_pybullet", "robile3_config.urdf")
+        print(robot_urdf_path)
         self.robot_id = p.loadURDF(robot_urdf_path, basePosition=[0, 0, 0.05],useFixedBase=False)
         p.setPhysicsEngineParameter(enableConeFriction=1)
         p.setPhysicsEngineParameter(contactBreakingThreshold=0.001)
@@ -80,23 +84,20 @@ class RobotSimulationNode(Node):
                         lateralFriction=1.0,
                         spinningFriction=0.1,
                         rollingFriction=0.1)
-        self.move_robot()
+        # self.move_robot()
         p.stepSimulation()
-<<<<<<< HEAD
         for joint_index in range(p.getNumJoints(self.robot_id)):
             joint_info = p.getJointInfo(self.robot_id, joint_index)
             joint_name = joint_info[1].decode('utf-8')
             if "wheel" in joint_name.lower():
                 state = p.getJointState(self.robot_id, joint_index)
                 print(f"{joint_name} velocity: {state[1]}")
-=======
 
         self.publish_odometry()
 
         linear_velocity, angular_velocity=1,-1
         self.move_robot_with_front_wheels(self.robot_id, linear_velocity, angular_velocity, 
                                       self.wheel_radius, self.wheel_base, self.track_width)
->>>>>>> 392f16d (Publishing odometry and fixed Laserscan data)
 
         # Get the robot's current velocity
         #linear_velocity, angular_velocity = p.getBaseVelocity(self.robot_id)
@@ -112,7 +113,6 @@ class RobotSimulationNode(Node):
         self.get_logger().info(f"Laser data : {laser_data}")
 
 
-<<<<<<< HEAD
     def calculate_wheel_velocities(self, linear_velocity, angular_velocity):
         # Robot parameters
         wheel_radius = 0.0515  # Replace with your wheel radius
@@ -169,7 +169,6 @@ class RobotSimulationNode(Node):
                         targetVelocity=right_velocity,
                         force=max_force
                     )
-=======
     def move_robot_with_front_wheels(self, robot_id, linear_velocity, angular_velocity, wheel_radius, wheel_base, track_width):
         if angular_velocity != 0:
             turning_radius = linear_velocity / angular_velocity
@@ -234,7 +233,36 @@ class RobotSimulationNode(Node):
         # Publish odometry message
         self.odom_publisher.publish(odom_msg)
 
->>>>>>> 392f16d (Publishing odometry and fixed Laserscan data)
+    def publish_laser_transform(self):
+
+        position, orientation = p.getBasePositionAndOrientation(self.robot_id)
+
+
+        laser_position = [
+            position[0] + self.laser_offset[0] * math.cos(p.getEulerFromQuaternion(orientation)[2]),
+            position[1] + self.laser_offset[0] * math.sin(p.getEulerFromQuaternion(orientation)[2]),
+            position[2] + self.laser_offset[2]
+        ]
+
+
+        transform = TransformStamped()
+        transform.header.stamp = self.get_clock().now().to_msg()
+        transform.header.frame_id = "odom"
+        transform.child_frame_id = "base_laser_front_link"
+
+
+        transform.transform.translation.x = laser_position[0]
+        transform.transform.translation.y = laser_position[1]
+        transform.transform.translation.z = laser_position[2]
+        transform.transform.rotation.x = orientation[0]
+        transform.transform.rotation.y = orientation[1]
+        transform.transform.rotation.z = orientation[2]
+        transform.transform.rotation.w = orientation[3]
+
+
+        self.tf_broadcaster.sendTransform(transform)
+
+
 
 
 def main(args=None):
