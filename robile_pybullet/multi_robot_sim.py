@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple
 
 class MultiRobileController:
-    def __init__(self, urdf_path: str, num_followers: int, formation_config: List[Tuple[float, float]]):
+    def __init__(self, urdf_path: str, num_followers: int, formation_config: List[Tuple[float, float]], connection_mode=p.GUI):
         """
         Initialize controller for multiple Robile robots
         Args:
@@ -15,7 +15,7 @@ class MultiRobileController:
             formation_config: List of (x,y) positions relative to leader for each follower
         """
         # Connect to PyBullet
-        p.connect(p.GUI)
+        p.connect(connection_mode)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.81)
         
@@ -211,11 +211,11 @@ def main():
         (-1.0, -1.0),  # First follower position
         (-1.0, 1.0),   # Second follower position
         (-2.0, -2.0),  # Third follower position
-        (-2.0, 2.0),   # Fourth follower position
+        (-2.0, 2.0),   # Fourth follower position 
     ]
     
     # Initialize controller with 4 followers
-    controller = MultiRobileController(urdf_path, num_followers=1, formation_config=formation_config)
+    controller = MultiRobileController(urdf_path, num_followers=4, formation_config=formation_config)
     
     try:
         while True:
@@ -226,23 +226,23 @@ def main():
                 controller.update_followers()
                 controller.run_simulation()
             
-            # Move sideways
-            for _ in range(1200):
-                controller.move_omnidirectional(0, 0.5, 0, controller.leader_id)
-                controller.update_followers()
-                controller.run_simulation()
+            # # Move sideways
+            # for _ in range(1200):
+            #     controller.move_omnidirectional(0, 0.5, 0, controller.leader_id)
+            #     controller.update_followers()
+            #     controller.run_simulation()
             
-            # Rotate in place
-            for _ in range(1200):
-                controller.move_omnidirectional(0, 0, 0.5, controller.leader_id)
-                controller.update_followers()
-                controller.run_simulation()
+            # # Rotate in place
+            # for _ in range(1200):
+            #     controller.move_omnidirectional(0, 0, 0.5, controller.leader_id)
+            #     controller.update_followers()
+            #     controller.run_simulation()
             
-            # Complex motion
-            for _ in range(1200):
-                controller.move_omnidirectional(0.3, 0.2, 0.1, controller.leader_id)
-                controller.update_followers()
-                controller.run_simulation()
+            # # Complex motion
+            # for _ in range(1200):
+            #     controller.move_omnidirectional(0.3, 0.2, 0.1, controller.leader_id)
+            #     controller.update_followers()
+            #     controller.run_simulation()
                 
     except KeyboardInterrupt:
         p.disconnect()
