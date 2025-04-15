@@ -251,7 +251,7 @@ class SimpleDistanceController:
 
 def main():
     # Initialize the controller with your URDF path
-    urdf_path = "/home/saiga/ros2_ws/src/Simulation_pybullet/robile_pybullet/robile3_config.urdf"
+    urdf_path = "/home/sunesh/ros2_ws/src/robile_pybullet/robile_pybullet/robile3_config.urdf"
     controller = RobileController(urdf_path)
     
     try:

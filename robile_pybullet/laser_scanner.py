@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 import numpy as np
+# Created with the help of Chat-GPT
 
 class LaserScanner:
     def __init__(self, robot_id, node, laser_pointers_freq=False, num_beams=90, 
